@@ -1,0 +1,263 @@
+<html>
+<head>
+<title>LD 37 - SpookyFM</title>
+</head>
+<body>
+<script src="js/three.min.js"></script>
+<script src="js/player.js"></script>
+<script src="js/resource.js"></script>
+    <script type='text/javascript' src='js/DAT.GUI.min.js'></script>
+ <script>
+    
+var camera, scene, renderer;
+     
+// Camera height over the playing field
+var cameraHeight = 800;
+     
+// Number of resources to randomly place
+var numResources = 100;
+     
+var extents = 100 * 100;    // 100 meters in each direction
+
+var floor;
+     
+var player;
+
+var clock = new THREE.Clock(); 
+     
+var resources = new Array();
+     
+var gui = new dat.GUI();
+     
+    var resourceRadius = 20;
+    var resourceGeometry = new THREE.SphereGeometry(resourceRadius, 32, 32 );
+    var resourceMaterial = new THREE.MeshBasicMaterial( {color: 0xff0000} );
+     
+var parameters = 
+	{
+		currentResources: 0, // numeric
+		maxResources: 200
+	};
+     
+init();
+animate();
+
+var overlay = null;
+
+function createOverlay(mainCanvas)
+ {
+    var canvasContainer = document.getElementById('container');
+    var overlayCanvas = document.createElement('canvas');
+    overlayCanvas.style.zIndex="1000";
+    overlayCanvas.style.position = 'absolute';
+    overlayCanvas.style.left = '0px';
+    overlayCanvas.style.top = '0px';
+    overlayCanvas.width = mainCanvas.clientWidth;
+    overlayCanvas.height = mainCanvas.clientHeight;
+    canvasContainer.appendChild(overlayCanvas);
+    return overlayCanvas;
+ }
+
+     
+function onKeyDown(event) 
+{
+switch (event.keyCode) {
+       case 38: // up
+       case 87: // w
+         player.moveDirection.UP = true;
+         break;
+       case 37: // left
+       case 65: // a
+         player.moveDirection.LEFT = true;
+         break;
+       case 40: // down
+       case 83: // s
+         player.moveDirection.DOWN = true;
+         break;
+       case 39: // right
+       case 68: // d
+         player.moveDirection.RIGHT = true;
+         break;
+       case 32: // space
+        // player.jump();
+        break; 
+    }  
+}
+
+     function onKeyUp(event) 
+{
+switch (event.keyCode) {
+       case 38: // up
+       case 87: // w
+         player.moveDirection.UP = false;
+         break;
+       case 37: // left
+       case 65: // a
+         player.moveDirection.LEFT = false;
+         break;
+       case 40: // down
+       case 83: // s
+         player.moveDirection.DOWN = false;
+         break;
+       case 39: // right
+       case 68: // d
+         player.moveDirection.RIGHT = false;
+         break;
+       case 32: // space
+        // player.jump();
+        break; 
+    }  
+}
+
+     
+function de2ra(degree) { return degree*(Math.PI/180); }
+
+     
+function placeResources(){
+    for (var i = 0; i < numResources; i++) {
+        placeResource();
+    }
+}
+     
+     
+     
+function placeResource() { 
+    // Generate a random position
+    var posX = Math.random() * extents * 1;
+    var posZ = Math.random() * extents * 1;
+    
+    
+    var position = new THREE.Vector3(posX, 0, posZ);
+    
+
+
+    
+    var resource = new Resource( resourceGeometry, resourceMaterial );
+    resource.radius = resourceRadius;
+    scene.add( resource );
+    //resource.position = position;
+    // TODO: No idea why this is necessary
+    resource.position.x = position.x;
+    resource.position.z = position.z;
+    resources.push(resource);
+}
+
+// Checks all resources for intersection
+function checkResources()
+{
+    var playerSphere = player.getCollisionSphere();
+    for (var i = 0; i < resources.length; i++) {
+        resource = resources[i];
+        // Get the resource sphere and intersect it with the player
+        var resourceSphere = resource.getCollisionSphere();
+        if (playerSphere.intersectsSphere(resourceSphere))
+        {
+            // For now, delete the resource
+            player.resources += resource.resources;
+            if (player.resources > parameters.maxResources)
+            {
+                player.resources = parameters.maxResources;
+            } 
+            resources.splice(i, 1);
+            scene.remove(resource);
+            i--;
+        }
+    }
+}
+    
+function updateUI()
+{
+	parameters.currentResources = player.resources;
+} 
+     
+function initUI()
+{
+	
+	// gui.add( parameters )
+	gui.add( parameters, 'currentResources', 0, parameters.maxResources).name('Resources').listen();
+	
+	gui.open();    
+}
+     
+     
+function init() {
+
+    
+    // Add the key down and up listeners
+    document.addEventListener('keydown', onKeyDown, false);
+    document.addEventListener('keyup', onKeyUp, false);
+    
+    
+    camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 1, 10000);
+    camera.position.y = cameraHeight;
+    
+    var lookAtPoint = new THREE.Vector3( 0, 0, 0 );
+    camera.lookAt(lookAtPoint);
+
+    scene = new THREE.Scene();
+
+    renderer = new THREE.WebGLRenderer();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+
+    document.body.appendChild(renderer.domElement);
+    
+    /* Light */
+    var light = new THREE.DirectionalLight( 0xffffff );
+    light.position.set( 0, 1, 1 ).normalize();
+    scene.add(light);
+    
+    
+    /* Floor  */    
+    
+    var floorGeometry = new THREE.PlaneGeometry( extents, extents, 1, 1 );
+   // var floorMaterial = new THREE.MeshBasicMaterial( { color: 0x0000ff, wireframe: true} );
+    
+    
+    var floorMaterial = new THREE.MeshPhongMaterial( { 
+        map: THREE.ImageUtils.loadTexture('textures/03intonacorovinato.jpg')
+    } );
+    
+    
+    floor = new THREE.Mesh( floorGeometry, floorMaterial );
+    floor.material.side = THREE.DoubleSide;
+    floor.rotateX(de2ra(90));
+    
+    /* Player */
+    var playerRadius = 40;
+    var playerGeometry = new THREE.SphereGeometry(playerRadius, 32, 32 );
+    var playerMaterial = new THREE.MeshBasicMaterial( {color: 0xffff00} );
+    player = new Player( playerGeometry, playerMaterial );
+    player.Radius = playerRadius;
+    scene.add( player );
+    
+
+    scene.add( floor );
+    
+    placeResources();
+    
+    initUI();
+
+}
+
+function animate() {
+
+    requestAnimationFrame(animate);
+    var delta = clock.getDelta();
+    player.update(delta);
+    
+    // Move the camera over the player
+    camera.position.x = player.position.x;
+    camera.position.z = player.position.z;
+    camera.lookAt(player.position);
+    
+    // Check for collisions with the resources
+    checkResources();
+
+    updateUI();
+    
+    renderer.render(scene, camera);
+
+}
+</script> 
+</body>
+</html>
