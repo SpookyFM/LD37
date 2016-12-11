@@ -6,11 +6,22 @@
 
 <body>
     <script src="js/three.min.js"></script>
+    <script type='text/javascript' src='js/DAT.GUI.min.js'></script>
     <script src="js/player.js"></script>
     <script src="js/resource.js"></script>
-    <script type='text/javascript' src='js/DAT.GUI.min.js'></script>
+    <script src="js/base.js"></script>
+    <script src="js/controller.js"></script>
+
     <script>
         var camera, scene, renderer;
+
+        // Time until the end of the game, in seconds
+        var totalTime = 60 * 3;    
+         
+        // The player's base
+        var base;
+    
+        var remainingTime = totalTime;
 
         // Camera height over the playing field
         var cameraHeight = 800;
@@ -38,18 +49,38 @@
         var resourceMaterial = new THREE.MeshBasicMaterial({
             color: 0xff0000
         });
+        
+        var numTimesButtonPressed = 0;
 
+        // The object that the UI binds to for getting values
         var parameters = {
             currentResources: 0, 
-            maxResources: 200,
             health: 100,
-            maxHealth: 100
+            remainingTimeText : 'remaining',
+            buildNextPart : function()
+            {
+                numTimesButtonPressed++;
+                if (numTimesButtonPressed % 2 == 0)
+                {
+                    // For some reason, I get two times the button. It's probably the enable/disable code
+                    base.buildNextPart(player);
+                }
+            }
         };
 
         init();
         animate();
 
-
+        function onTimeElapsed()
+        {
+            alert("Time is up!");
+        }
+        
+        function onBaseFullyBuilt()
+        {
+            console.log("You is a winner!");
+        }
+        
         function onKeyDown(event) {
             switch (event.keyCode) {
                 case 38: // up
@@ -69,7 +100,9 @@
                     player.moveDirection.RIGHT = true;
                     break;
                 case 32: // space
-                    // player.jump();
+                    // Cheat: Give full resources
+                    player.resources = player.maxResources;
+                    player.health = player.maxHealth;
                     break;
             }
         }
@@ -163,12 +196,24 @@
         
         var currentResourcesProgressBar;
         var healthProgressBar;
+        var buttonBuildNextPart;
     
         function updateUI() {
             parameters.currentResources = player.resources;            
             currentResourcesProgressBar.__max = player.maxResources;
             parameters.health = player.health;
             healthProgressBar.__max = player.maxHealth;
+            
+            // Format the time
+            var minutes = Math.floor(remainingTime / 60);
+            var seconds = Math.floor(remainingTime % 60);
+            parameters.remainingTimeText = minutes + ':' + seconds;
+            
+            // Button enabled state
+            var canBuild = base.canBuildNextPart(player);
+            buttonBuildNextPart.disabled = !canBuild;
+            // Get the name for the button
+            buttonBuildNextPart.__button.innerHTML = base.getBuildText();
         }
 
         
@@ -178,6 +223,10 @@
             
             healthProgressBar = gui.add(parameters, 'health',
                 0, 100).name('Health').listen();
+            
+            gui.add(parameters, 'remainingTimeText').name("Remaining Time").listen();
+            
+            buttonBuildNextPart = gui.add(parameters, 'buildNextPart').name("Build");
 
             gui.open();
         }
@@ -239,6 +288,10 @@
             scene.add(floor);
 
             placeResources();
+            
+            
+            // Base
+            base = new Base();
 
             initUI();
 
@@ -248,6 +301,18 @@
 
             requestAnimationFrame(animate);
             var delta = clock.getDelta();
+            
+            remainingTime -= delta;
+            
+            if (remainingTime < 0)
+            {
+                onTimeElapsed();
+            }
+            
+            if (base.isFullyBuilt())
+            {
+                onBaseFullyBuilt();
+            }
             
             // Update the player
             player.update(delta);
@@ -261,6 +326,8 @@
             checkResources();
 
             updateUI();
+            
+            
 
             renderer.render(scene, camera);
 
