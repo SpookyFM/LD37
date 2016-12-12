@@ -29,10 +29,10 @@
         var remainingTime = totalTime;
 
         // Camera height over the playing field
-        var cameraHeight = 800;
+        var cameraHeight = 1100;
 
         // Number of resources to randomly place
-        var numResources = 100;
+        var numResources = 300;
 
         var extents = 100 * 100; // 100 meters in each direction
 
@@ -55,10 +55,18 @@
         var resourceMaterial = new THREE.MeshBasicMaterial({
             color: 0xff0000
         });
+        
+        var fadeOutMesh;
 
         var numTimesButtonPressed = 0;
         
         var enemies = new Array();
+        
+        var fadeOutActive = false;
+        
+        var fadeOutDuration = 3.0;
+        
+        var remainingFadeOut = fadeOutDuration;
 
         // The object that the UI binds to for getting values
         var parameters = {
@@ -71,18 +79,34 @@
                     // For some reason, I get two times the button. It's probably the enable/disable code
                     base.buildNextPart(player);
                 }
-            }
+            },
+            gameState: 'You win!'
         };
 
         init();
         animate();
 
         function onTimeElapsed() {
-            alert("Time is up!");
+            if (fadeOutActive)
+                return;
+            console.log("You lose");
+            fadeOutMesh.material.color.setHex( 0xff0000 );
+            remainingFadeOut = fadeOutDuration;
+            parameters.gameState = "You lose!";
+            gui.add(parameters, 'gameState').name("Game over");
+            fadeOutActive = true;
+            enemies = new Array();
         }
 
         function onBaseFullyBuilt() {
-            console.log("You is a winner!");
+            if (fadeOutActive)
+                return;
+            console.log("You win!");
+            fadeOutMesh.material.color.setHex (0x00ff00);
+            remainingFadeOut = fadeOutDuration;
+            gui.add(parameters, 'gameState').name("Game over");
+            fadeOutActive = true;
+            enemies = new Array();
         }
 
         
@@ -130,8 +154,8 @@
                     break;
                 case 32: // space
                     // Cheat: Give full resources
-                    player.resources = player.maxResources;
-                    player.health = player.maxHealth;
+                   // player.resources = player.maxResources;
+                  //  player.health = player.maxHealth;
                     break;
             }
         }
@@ -169,6 +193,25 @@
             return radians * (180 / Math.PI);
         }
 
+        
+        function placeAI() {
+            // Generate a random position
+            var posX = Math.random() * extents - extents * 0.5;
+            var posZ = Math.random() * extents - extents * 0.5;
+
+            var enemy = new AI(80.0, 0xff00ff); 
+            enemies.push(enemy);
+            scene.add(enemy);
+            enemy.position.x = posX;
+            enemy.position.z = posZ;
+        }
+
+        function placeAIs(numAIs)
+        {
+            for (var i = 0; i < numAIs; i++) {
+                placeAI();
+            }
+        }
 
         function placeResources() {
             for (var i = 0; i < numResources; i++) {
@@ -176,18 +219,13 @@
             }
         }
 
-
-
         function placeResource() {
             // Generate a random position
-            var posX = Math.random() * extents * 1;
-            var posZ = Math.random() * extents * 1;
+            var posX = Math.random() * extents - extents * 0.5;
+            var posZ = Math.random() * extents - extents * 0.5;
 
 
             var position = new THREE.Vector3(posX, 0, posZ);
-
-
-
 
             var resource = new Resource(resourceGeometry, resourceMaterial);
             resource.radius = resourceRadius;
@@ -209,14 +247,6 @@
                 if (playerSphere.intersectsSphere(resourceSphere)) {
                     // Give the resources to the player
                     player.giveResources(resource.resources);
-
-                    // TODO: Placeholder code for death testing only
-                    var isDead = !player.reduceHealth(resource.resources);
-                    if (isDead) {
-                        // Handle player death
-                        player.reset();
-                        return;
-                    }
 
                     // Remove the resource from the array and from the scene
                     resources.splice(i, 1);
@@ -245,7 +275,9 @@
             var canBuild = base.canBuildNextPart(player);
             buttonBuildNextPart.disabled = !canBuild;
             // Get the name for the button
-            buttonBuildNextPart.__button.innerHTML = base.getBuildText();
+           buttonBuildNextPart.__button.innerHTML = base.getBuildText();
+
+            
         }
 
 
@@ -298,14 +330,31 @@
             // var floorMaterial = new THREE.MeshBasicMaterial( { color: 0x0000ff, wireframe: true} );
 
 
+            var texture = new THREE.TextureLoader().load( 'textures/03intonacorovinato.jpg'  );
+            texture.wrapS = THREE.RepeatWrapping;
+            texture.wrapT = THREE.RepeatWrapping;
+            texture.repeat.set( 16, 16 );
+
             var floorMaterial = new THREE.MeshPhongMaterial({
-                map: THREE.ImageUtils.loadTexture('textures/03intonacorovinato.jpg')
+                map: texture
             });
+
 
 
             floor = new THREE.Mesh(floorGeometry, floorMaterial);
             floor.material.side = THREE.DoubleSide;
             floor.rotateX(de2ra(90));
+            
+            var fadeOutGeometry = floorGeometry.clone();
+            var fadeOutMaterial = new THREE.MeshBasicMaterial( { color: 0xff0000} );
+            fadeOutMesh = new THREE.Mesh(fadeOutGeometry, fadeOutMaterial);
+            fadeOutMesh.material.opacity = 0.0;
+            fadeOutMesh.material.side = THREE.DoubleSide;
+            fadeOutMesh.material.transparent = true;
+            fadeOutMesh.rotateX(de2ra(90));
+            fadeOutMesh.position.y += 400;
+
+            scene.add(fadeOutMesh);
 
             /* Player */
             var playerRadius = 40;
@@ -330,11 +379,8 @@
             
             
             // Enemies
-            var enemy = new AI(50.0, 0xffff00); 
-            enemies.push(enemy);
-            scene.add(enemy);
-            enemy.position.x = 500;
-            enemy.position.z = 500;
+            placeAIs(16);
+
             
             initUI();
 
@@ -345,6 +391,16 @@
             requestAnimationFrame(animate);
             var delta = clock.getDelta();
 
+            if (fadeOutActive)
+            {
+                remainingFadeOut = remainingFadeOut - delta;
+                remainingFadeOut = Math.max(remainingFadeOut, 0);
+                var ratio = remainingFadeOut / fadeOutDuration;
+                ratio = Math.min(1.0, ratio);
+                fadeOutMesh.material.opacity = 1.0 - ratio;
+            }
+            
+            
             remainingTime -= delta;
 
             if (remainingTime < 0) {

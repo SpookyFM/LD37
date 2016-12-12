@@ -17,6 +17,8 @@ function LaserWeapon() {
     
     // How long the laser should be visible for
     this.laserVisibleFor = 0.2;
+    
+    this.targetPlayer = false;
 }
 
 LaserWeapon.prototype = Object.create(Weapon.prototype);
@@ -57,6 +59,20 @@ LaserWeapon.prototype.shoot = function(fromPosition, toPosition)
             }
         }
        // console.log("weapon hit something!");
+    }
+    if (this.targetPlayer)
+    {
+        intersects = raycaster.intersectObject( player );
+        if (intersects.length > 0) {
+        for (var i = 0; i < intersects.length; i++)
+        {
+            if (intersects[i].object.reduceHealth)
+            {
+                intersects[i].object.reduceHealth(this.damage);
+            }
+        }
+       // console.log("weapon hit something!");
+    }
     }
 }
 

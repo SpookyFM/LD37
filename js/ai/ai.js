@@ -16,12 +16,16 @@ function AI(inRadius, inColor) {
     this.velocity = new THREE.Vector3();
     this.acceleration = new THREE.Vector3(0, 0, 0);
     this.ambientFriction = new THREE.Vector3(-10, 0, -10);
+    
+    this.currentAngle = 0;
+    
+    this.speed = 100;
 
     // Number of resources to spawn when the AI is dead
-    this.resources = 0;
+    this.resources = 50;
 
     // The max health
-    this.maxHealth = 100;
+    this.maxHealth = 40;
     
     // The current health
     this.health = this.maxHealth;
@@ -30,10 +34,16 @@ function AI(inRadius, inColor) {
     this.spawnPosition = new THREE.Vector3(0, 0, 0);
     
     // Radius in which the enemy will attack the player
-    this.attackRadius = 1000;
+    this.attackRadius = 600;
+    
+    this.halfAccel = new THREE.Vector3();
+    this.scaledVelocity = new THREE.Vector3();
     
     this.weapon = new LaserWeapon();
     this.weapon.attachToPlayer(this);
+    this.weapon.targetPlayer = true;
+    this.weapon.damage = 23;
+    this.weapon.firingRate = 1.2
 }
 
 AI.prototype = Object.create(THREE.Mesh.prototype);
@@ -71,6 +81,12 @@ AI.prototype.reduceHealth = function(amount) {
     return isAlive;
 };
 
+AI.prototype.movementUpdate = function(delta) {
+    this.translateX(this.velocity.x * delta);
+    this.translateZ(this.velocity.z * delta);
+        
+};
+
 AI.prototype.update = function(delta)
 {
     this.weapon.update(delta);
@@ -80,8 +96,22 @@ AI.prototype.update = function(delta)
     
     if (distanceToPlayer > this.attackRadius)
     {
+        // Do random roaming
+        
+        var randomAngle = Math.random() * 0.2 - 0.1;
+        this.currentAngle += randomAngle;
+       // console.log(this.currentAngle);
+        var m = new THREE.Matrix4();
+        m.makeRotationY(this.currentAngle);
+        this.velocity = new THREE.Vector3(0, 0, this.speed);
+        this.velocity.applyMatrix4(m);
+        //console.log(this.velocity);
+        
+        this.movementUpdate(delta);
+        
         return;
     }
+    this.velocity.z = 0;
     
     if (this.weapon.canShoot())
     {

@@ -39,6 +39,10 @@ function Base() {
     
     var floorMesh = new THREE.Mesh(floorGeometry, buildingPartUnbuiltMaterial);
     this.add(floorMesh);
+    
+    var ceilingMesh = floorMesh.clone();
+    ceilingMesh.position.y += fullExtent * 0.5;
+    
     this.partMeshes.push(ceilingMesh);
     
     
@@ -61,8 +65,7 @@ function Base() {
     wallMesh4.position.z += fullExtent * 0.5;
     this.partMeshes.push(wallMesh4);
     
-    var ceilingMesh = floorMesh.clone();
-    ceilingMesh.position.y += fullExtent * 0.5;
+    
 
     this.currentMesh = floorMesh;
 }
@@ -77,6 +80,14 @@ Base.prototype.getBuildText = function() {
     {
         return "---";
     }
+    
+    // First, is the player close enough?
+    var distance = this.position.distanceTo(player.position);
+    if (distance > this.interactionRadius)
+    {
+        return "Too far away to build.";
+    }
+    
     
     var nextPart = this.partsToBuild[this.partsToBuild.length - 1];
     
@@ -131,8 +142,14 @@ Base.prototype.buildNextPart = function(player) {
     
     this.builtParts.push(nextPart);
     
-    // Show this building step
+
     this.currentMesh.material = this.buildingPartBuiltMaterial;
+        // Show this building step
+    if (this.partMeshes.length == 0)
+    {
+        return;
+    }
+    
     this.currentMesh = this.partMeshes.pop();
     this.add(this.currentMesh);
 };

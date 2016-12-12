@@ -18,6 +18,10 @@ function Player() {
 
 
     this.radius = 40;
+    
+    this.healthRegen = 5;
+    this.healthRegenTick = 5;
+    this.currentHealthRegenTick = this.healthRegenTick;
 
     // Gameplay related variables
     // Number of resources the player has gathered
@@ -50,7 +54,8 @@ Player.prototype.getCollisionSphere = function() {
 
 // Resets the player after death
 Player.prototype.reset = function() {
-    this.position = this.spawnPosition;
+    this.position.x = this.spawnPosition.x;
+    this.position.z = this.spawnPosition.z;
     this.health = this.maxHealth;
     this.resources = 0;
 };
@@ -64,6 +69,10 @@ Player.prototype.giveResources = function(numResources) {
 // Makes the player lose the given amount of health. Returns true if the player is still alive
 Player.prototype.reduceHealth = function(amount) {
     this.health -= amount;
+    if (this.health <= 0)
+    {
+        this.reset();
+    }
     return this.health > 0;
 };
 
@@ -71,6 +80,16 @@ Player.prototype.update = (function() {
     var halfAccel = new THREE.Vector3();
     var scaledVelocity = new THREE.Vector3();
     return function(delta) {
+        
+        // Regenerate health
+        this.currentHealthRegenTick -= delta;
+        if (this.currentHealthRegenTick < 0)
+        {
+            this.currentHealthRegenTick = this.healthRegenTick;
+            this.health += this.healthRegen;
+            this.health = Math.min(this.health, this.maxHealth);
+        }
+        
         var r = this._aggregateRotation
             .multiplyScalar(delta)
             .add(this.rotation);
