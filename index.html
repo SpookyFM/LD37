@@ -1,0 +1,443 @@
+<html>
+
+<head>
+    <title>LD 37 - SpookyFM</title>
+</head>
+
+<body>
+    <script src="js/three.min.js"></script>
+    <script type='text/javascript' src='js/DAT.GUI.min.js'></script>
+    <script src="js/player.js"></script>
+    <script src="js/resource.js"></script>
+    <script src="js/base.js"></script>
+    <script src="js/controller.js"></script>
+    <script src="js/weapons/weapon.js"></script>
+    <script src="js/weapons/laserWeapon.js"></script>
+    <script src="js/weapons/shockwaveWeapon.js"></script>
+    <script src="js/weapons/artilleryWeapon.js"></script>
+    <script src="js/ai/ai.js"></script>
+
+    <script>
+        var camera, scene, renderer;
+
+        // Time until the end of the game, in seconds
+        var totalTime = 60 * 3;
+
+        // The player's base
+        var base;
+
+        var remainingTime = totalTime;
+
+        // Camera height over the playing field
+        var cameraHeight = 1100;
+
+        // Number of resources to randomly place
+        var numResources = 300;
+
+        var extents = 100 * 100; // 100 meters in each direction
+
+        // The initial position of the player
+        var spawnPosition = new THREE.Vector3(0, 0, 0);
+
+        var floor;
+
+        var player;
+
+        var clock = new THREE.Clock();
+
+        var resources = new Array();
+        var allAI = new Array();
+
+        var gui = new dat.GUI();
+
+        var resourceRadius = 20;
+        var resourceGeometry = new THREE.SphereGeometry(resourceRadius, 32, 32);
+        var resourceMaterial = new THREE.MeshBasicMaterial({
+            color: 0xff0000
+        });
+        
+        var fadeOutMesh;
+
+        var numTimesButtonPressed = 0;
+        
+        var enemies = new Array();
+        
+        var fadeOutActive = false;
+        
+        var fadeOutDuration = 3.0;
+        
+        var remainingFadeOut = fadeOutDuration;
+
+        // The object that the UI binds to for getting values
+        var parameters = {
+            currentResources: 0,
+            health: 100,
+            remainingTimeText: 'remaining',
+            buildNextPart: function() {
+                numTimesButtonPressed++;
+                if (numTimesButtonPressed % 2 == 0) {
+                    // For some reason, I get two times the button. It's probably the enable/disable code
+                    base.buildNextPart(player);
+                }
+            },
+            gameState: 'You win!'
+        };
+
+        init();
+        animate();
+
+        function onTimeElapsed() {
+            if (fadeOutActive)
+                return;
+            console.log("You lose");
+            fadeOutMesh.material.color.setHex( 0xff0000 );
+            remainingFadeOut = fadeOutDuration;
+            parameters.gameState = "You lose!";
+            gui.add(parameters, 'gameState').name("Game over");
+            fadeOutActive = true;
+            enemies = new Array();
+        }
+
+        function onBaseFullyBuilt() {
+            if (fadeOutActive)
+                return;
+            console.log("You win!");
+            fadeOutMesh.material.color.setHex (0x00ff00);
+            remainingFadeOut = fadeOutDuration;
+            gui.add(parameters, 'gameState').name("Game over");
+            fadeOutActive = true;
+            enemies = new Array();
+        }
+
+        
+        function onDocumentMouseDown(event) {
+            var raycaster = new THREE.Raycaster();
+            var mouse = new THREE.Vector2();
+            mouse.x = ( event.clientX / window.innerWidth ) * 2 - 1;
+	        mouse.y = - ( event.clientY / window.innerHeight ) * 2 + 1;		
+            
+            // update the picking ray with the camera and mouse position	
+	       raycaster.setFromCamera( mouse, camera );	
+
+	       // calculate objects intersecting the picking ray
+	       var intersects = raycaster.intersectObject( floor, true );
+
+            if (intersects.length > 0) {
+                var intersectedPoint = intersects[0].point;
+                
+                // Try to fire the current weapon
+            //    console.log(player.currentWeapon.canShoot());
+                if (player.currentWeapon.canShoot())
+                {
+                    player.currentWeapon.shoot(player.position, intersectedPoint);
+                }
+            }
+        }
+
+        function onKeyDown(event) {
+            switch (event.keyCode) {
+                case 38: // up
+                case 87: // w
+                    player.moveDirection.UP = true;
+                    break;
+                case 37: // left
+                case 65: // a
+                    player.moveDirection.LEFT = true;
+                    break;
+                case 40: // down
+                case 83: // s
+                    player.moveDirection.DOWN = true;
+                    break;
+                case 39: // right
+                case 68: // d
+                    player.moveDirection.RIGHT = true;
+                    break;
+                case 32: // space
+                    // Cheat: Give full resources
+                   // player.resources = player.maxResources;
+                  //  player.health = player.maxHealth;
+                    break;
+            }
+        }
+
+        function onKeyUp(event) {
+            switch (event.keyCode) {
+                case 38: // up
+                case 87: // w
+                    player.moveDirection.UP = false;
+                    break;
+                case 37: // left
+                case 65: // a
+                    player.moveDirection.LEFT = false;
+                    break;
+                case 40: // down
+                case 83: // s
+                    player.moveDirection.DOWN = false;
+                    break;
+                case 39: // right
+                case 68: // d
+                    player.moveDirection.RIGHT = false;
+                    break;
+                case 32: // space
+                    // player.jump();
+                    break;
+            }
+        }
+
+
+        function de2ra(degree) {
+            return degree * (Math.PI / 180);
+        }
+        
+         function ra2de(radians) {
+            return radians * (180 / Math.PI);
+        }
+
+        
+        function placeAI() {
+            // Generate a random position
+            var posX = Math.random() * extents - extents * 0.5;
+            var posZ = Math.random() * extents - extents * 0.5;
+
+            var enemy = new AI(80.0, 0xff00ff); 
+            enemies.push(enemy);
+            scene.add(enemy);
+            enemy.position.x = posX;
+            enemy.position.z = posZ;
+        }
+
+        function placeAIs(numAIs)
+        {
+            for (var i = 0; i < numAIs; i++) {
+                placeAI();
+            }
+        }
+
+        function placeResources() {
+            for (var i = 0; i < numResources; i++) {
+                placeResource();
+            }
+        }
+
+        function placeResource() {
+            // Generate a random position
+            var posX = Math.random() * extents - extents * 0.5;
+            var posZ = Math.random() * extents - extents * 0.5;
+
+
+            var position = new THREE.Vector3(posX, 0, posZ);
+
+            var resource = new Resource(resourceGeometry, resourceMaterial);
+            resource.radius = resourceRadius;
+            scene.add(resource);
+            //resource.position = position;
+            // TODO: No idea why this is necessary
+            resource.position.x = position.x;
+            resource.position.z = position.z;
+            resources.push(resource);
+        }
+
+        // Checks all resources for intersection
+        function checkResources() {
+            var playerSphere = player.getCollisionSphere();
+            for (var i = 0; i < resources.length; i++) {
+                resource = resources[i];
+                // Get the resource sphere and intersect it with the player
+                var resourceSphere = resource.getCollisionSphere();
+                if (playerSphere.intersectsSphere(resourceSphere)) {
+                    // Give the resources to the player
+                    player.giveResources(resource.resources);
+
+                    // Remove the resource from the array and from the scene
+                    resources.splice(i, 1);
+                    scene.remove(resource);
+                    i--;
+                }
+            }
+        }
+
+        var currentResourcesProgressBar;
+        var healthProgressBar;
+        var buttonBuildNextPart;
+
+        function updateUI() {
+            parameters.currentResources = player.resources;
+            currentResourcesProgressBar.__max = player.maxResources;
+            parameters.health = player.health;
+            healthProgressBar.__max = player.maxHealth;
+
+            // Format the time
+            var minutes = Math.floor(remainingTime / 60);
+            var seconds = Math.floor(remainingTime % 60);
+            parameters.remainingTimeText = minutes + ':' + seconds;
+
+            // Button enabled state
+            var canBuild = base.canBuildNextPart(player);
+            buttonBuildNextPart.disabled = !canBuild;
+            // Get the name for the button
+           buttonBuildNextPart.__button.innerHTML = base.getBuildText();
+
+            
+        }
+
+
+
+        function initUI() {
+            currentResourcesProgressBar = gui.add(parameters, 'currentResources', 0, 200).name('Resources').listen();
+
+            healthProgressBar = gui.add(parameters, 'health',
+                0, 100).name('Health').listen();
+
+            gui.add(parameters, 'remainingTimeText').name("Remaining Time").listen();
+
+            buttonBuildNextPart = gui.add(parameters, 'buildNextPart').name("Build");
+
+            gui.open();
+        }
+
+
+        function init() {
+
+
+            // Add the key down and up listeners
+            document.addEventListener('keydown', onKeyDown, false);
+            document.addEventListener('keyup', onKeyUp, false);
+            document.addEventListener('click', onDocumentMouseDown, false);
+
+
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 1, 10000);
+            camera.position.y = cameraHeight;
+
+            var lookAtPoint = new THREE.Vector3(0, 0, 0);
+            camera.lookAt(lookAtPoint);
+
+            scene = new THREE.Scene();
+
+            renderer = new THREE.WebGLRenderer();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+
+            document.body.appendChild(renderer.domElement);
+
+            /* Light */
+            var light = new THREE.DirectionalLight(0xffffff);
+            light.position.set(0, 1, 1).normalize();
+            scene.add(light);
+
+
+            /* Floor  */
+
+            var floorGeometry = new THREE.PlaneGeometry(extents, extents, 1, 1);
+            // var floorMaterial = new THREE.MeshBasicMaterial( { color: 0x0000ff, wireframe: true} );
+
+
+            var texture = new THREE.TextureLoader().load( 'textures/03intonacorovinato.jpg'  );
+            texture.wrapS = THREE.RepeatWrapping;
+            texture.wrapT = THREE.RepeatWrapping;
+            texture.repeat.set( 16, 16 );
+
+            var floorMaterial = new THREE.MeshPhongMaterial({
+                map: texture
+            });
+
+
+
+            floor = new THREE.Mesh(floorGeometry, floorMaterial);
+            floor.material.side = THREE.DoubleSide;
+            floor.rotateX(de2ra(90));
+            
+            var fadeOutGeometry = floorGeometry.clone();
+            var fadeOutMaterial = new THREE.MeshBasicMaterial( { color: 0xff0000} );
+            fadeOutMesh = new THREE.Mesh(fadeOutGeometry, fadeOutMaterial);
+            fadeOutMesh.material.opacity = 0.0;
+            fadeOutMesh.material.side = THREE.DoubleSide;
+            fadeOutMesh.material.transparent = true;
+            fadeOutMesh.rotateX(de2ra(90));
+            fadeOutMesh.position.y += 400;
+
+            scene.add(fadeOutMesh);
+
+            /* Player */
+            var playerRadius = 40;
+            var playerGeometry = new THREE.SphereGeometry(playerRadius, 32, 32);
+            var playerMaterial = new THREE.MeshBasicMaterial({
+                color: 0xffff00
+            });
+            player = new Player(playerGeometry, playerMaterial);
+            player.Radius = playerRadius;
+            scene.add(player);
+            // player.currentWeapon.attachToPlayer(player);
+
+
+            scene.add(floor);
+
+            placeResources();
+
+
+            // Base
+            base = new Base();
+            scene.add(base);
+            
+            
+            // Enemies
+            placeAIs(16);
+
+            
+            initUI();
+
+        }
+
+        function animate() {
+
+            requestAnimationFrame(animate);
+            var delta = clock.getDelta();
+
+            if (fadeOutActive)
+            {
+                remainingFadeOut = remainingFadeOut - delta;
+                remainingFadeOut = Math.max(remainingFadeOut, 0);
+                var ratio = remainingFadeOut / fadeOutDuration;
+                ratio = Math.min(1.0, ratio);
+                fadeOutMesh.material.opacity = 1.0 - ratio;
+            }
+            
+            
+            remainingTime -= delta;
+
+            if (remainingTime < 0) {
+                onTimeElapsed();
+            }
+
+            if (base.isFullyBuilt()) {
+                onBaseFullyBuilt();
+            }
+
+            // Update the player
+            player.update(delta);
+            
+            for (var i = 0; i < enemies.length; i++)
+            {
+                enemies[i].update(delta);
+            }
+
+            // Move the camera over the player
+            camera.position.x = player.position.x;
+            camera.position.z = player.position.z;
+            camera.lookAt(player.position);
+
+            // Check for collisions with the resources
+            checkResources();
+
+            updateUI();
+
+            // Update the current weapon
+            player.currentWeapon.update(delta);
+
+            renderer.render(scene, camera);
+            
+         
+
+        }
+    </script>
+</body>
+
+</html>
