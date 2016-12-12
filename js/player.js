@@ -34,6 +34,9 @@ function Player() {
     
     // The default spawn position
     this.spawnPosition = new THREE.Vector3(0, 0, 0);
+    
+    this.currentWeapon = new LaserWeapon();
+    this.currentWeapon.attachToPlayer(this);
 }
 
 Player.prototype = Object.create(THREE.Mesh.prototype);
