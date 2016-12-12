@@ -18,7 +18,53 @@ function Base() {
         var wallPart = new BasePart("Wall"+i, 80);
         this.partsToBuild.push(wallPart);
     }
-    this.partsToBuild.push(floorPart);
+    this.partsToBuild.push(floorPart);    
+    
+    this.partMeshes = new Array();
+    
+    var fullExtent = 300;
+    
+    var wallGeometry = new THREE.BoxGeometry(fullExtent, fullExtent, 30);
+    var floorGeometry = new THREE.BoxGeometry(fullExtent, 30, fullExtent);
+    var buildingPartUnbuiltMaterial = new THREE.MeshBasicMaterial({
+        color: 0x0000ff
+    });
+    buildingPartUnbuiltMaterial.opacity = 0.3;
+    buildingPartUnbuiltMaterial.transparent = true;
+    
+    this.buildingPartBuiltMaterial = new THREE.MeshBasicMaterial({
+        color: 0xff0000
+    });
+
+    
+    var floorMesh = new THREE.Mesh(floorGeometry, buildingPartUnbuiltMaterial);
+    this.add(floorMesh);
+    this.partMeshes.push(ceilingMesh);
+    
+    
+    var wallMesh = new THREE.Mesh(wallGeometry, buildingPartUnbuiltMaterial);
+    var wallMesh2 = wallMesh.clone();
+    var wallMesh3 = wallMesh.clone();
+    var wallMesh4 = wallMesh.clone();
+    wallMesh.position.x += fullExtent * 0.5;
+    wallMesh.rotateY(de2ra(90));
+    this.partMeshes.push(wallMesh);
+
+    
+    wallMesh2.position.x -= fullExtent * 0.5;
+    wallMesh2.rotateY(de2ra(90));
+    this.partMeshes.push(wallMesh2);
+    
+    wallMesh3.position.z -= fullExtent * 0.5;
+    this.partMeshes.push(wallMesh3);
+    
+    wallMesh4.position.z += fullExtent * 0.5;
+    this.partMeshes.push(wallMesh4);
+    
+    var ceilingMesh = floorMesh.clone();
+    ceilingMesh.position.y += fullExtent * 0.5;
+
+    this.currentMesh = floorMesh;
 }
 
 Base.prototype = Object.create(THREE.Object3D.prototype);
@@ -85,7 +131,10 @@ Base.prototype.buildNextPart = function(player) {
     
     this.builtParts.push(nextPart);
     
-    // TODO: Add graphical representation for this  
+    // Show this building step
+    this.currentMesh.material = this.buildingPartBuiltMaterial;
+    this.currentMesh = this.partMeshes.pop();
+    this.add(this.currentMesh);
 };
 
 // A part of the base

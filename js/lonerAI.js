@@ -1,1 +1,0 @@
-// Loner AI is placed at random and is beatable using the default weapon
